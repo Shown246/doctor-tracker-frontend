@@ -77,9 +77,10 @@ export async function secureFetch(request: Request) {
       resetCsrf();
       await csrf().catch(() => undefined);
     }
-    const authForm = /\/auth\/(login|register|csrf|logout)$/.test(
-      new URL(request.url).pathname,
-    );
+    const authForm =
+      /\/auth\/(login|register|csrf|logout|google\/(start|pending|register|link))$/.test(
+        new URL(request.url).pathname,
+      );
     if (
       !authForm &&
       (error.status === 401 ||

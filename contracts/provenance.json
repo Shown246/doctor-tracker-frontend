@@ -3,6 +3,6 @@
   "backendCommit": "280331b",
   "handoffCommit": "fc3d947",
   "source": "../doctor-tracker-backend/src/http/openapi.ts (local runtime schemas)",
-  "sha256": "3079225f4253acac1fcad9149acfc0b4201f3b23c4bf72184dde94e7128c6fe1",
-  "release": "Local contract update: patients self-register; admin patient creation removed"
+  "sha256": "3f28eb487d650b7f34f2d1408449eda041c3e4dca7f7598837aed3c48266dea8",
+  "release": "Local contract update: Google OAuth sign-in, profile completion and explicit password-based account linking"
 }

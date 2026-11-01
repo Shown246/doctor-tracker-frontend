@@ -5,7 +5,11 @@ import { LoginForm } from '@/components/auth';
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ reason?: string; registered?: string }>;
+  searchParams: Promise<{
+    reason?: string;
+    registered?: string;
+    googleError?: string;
+  }>;
 }) {
   const account = await readSession();
   if (account) redirect(portalPath(account));
@@ -14,6 +18,7 @@ export default async function Page({
     <LoginForm
       expired={params.reason === 'expired'}
       registered={params.registered === '1'}
+      googleError={params.googleError}
     />
   );
 }
