@@ -651,113 +651,6 @@
             }
           }
         }
-      },
-      "post": {
-        "tags": ["Management"],
-        "operationId": "post_patients",
-        "summary": "Create a patient and optional initial assignments (admin)",
-        "description": "Creates the patient and all initial assignments atomically. doctorIds accepts at most 100 IDs and is deduplicated case-insensitively. Missing doctors abort the transaction. Email is optional and unique when present; null omits it. Empty/null address and empty condition are stored as absent. Birth dates must be real dates from 1900 through today in Asia/Dhaka. Age is derived.",
-        "security": [{ "sessionCookie": [], "csrfToken": [] }],
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/PatientCreate" },
-              "example": {
-                "name": "Example Patient",
-                "dateOfBirth": "1995-02-28",
-                "gender": "undisclosed",
-                "phone": "+8801800000000",
-                "condition": "Routine observation",
-                "status": "unassessed",
-                "doctorIds": []
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful response; private, no-store",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/PatientResponse" }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid identifier, body or query; unsupported fields are rejected",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" }
-              }
-            }
-          },
-          "401": {
-            "description": "Authentication is required or has expired",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden role, inactive account, missing profile, invalid CSRF token or browser origin",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" }
-              }
-            }
-          },
-          "404": {
-            "description": "Profile or assignment not found; doctors receive 404 outside their scope",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" }
-              }
-            }
-          },
-          "409": {
-            "description": "Stale revision, duplicate email or attempted linked-profile email change",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" }
-              }
-            }
-          },
-          "413": {
-            "description": "Request exceeds 32 KiB",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" }
-              }
-            }
-          },
-          "415": {
-            "description": "Unsupported request encoding or charset",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" }
-              }
-            }
-          },
-          "503": {
-            "description": "Database unavailable",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/Error" }
-              }
-            }
-          }
-        }
       }
     },
     "/patients/{id}": {
@@ -3077,7 +2970,7 @@
       "post": {
         "tags": ["Authentication"],
         "operationId": "registerAccount",
-        "summary": "Submit a pending doctor or patient account",
+        "summary": "Register an active patient account or submit a doctor account for approval",
         "security": [{ "csrfToken": [] }],
         "requestBody": {
           "required": true,
@@ -3087,10 +2980,10 @@
             }
           }
         },
-        "description": "Does not log in or create a profile. Requires a previously established CSRF session. Only doctor/patient roles and the listed fields are accepted. Ten attempts per IP per fixed one-hour window.",
+        "description": "Patients receive an active account and linked unassessed patient profile immediately. Doctors receive a pending account without a profile and require admin approval. Does not log in. Existing profile emails are not automatically linked. Requires a previously established CSRF session. Only doctor/patient roles and the listed fields are accepted. Ten attempts per IP per fixed one-hour window.",
         "responses": {
           "201": {
-            "description": "Pending account",
+            "description": "Active patient or pending doctor account",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/CurrentUserResponse" }
@@ -3811,56 +3704,6 @@
             "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
           }
         },
-        "additionalProperties": false
-      },
-      "PatientCreate": {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-          "name": { "type": "string", "minLength": 1, "maxLength": 120 },
-          "dateOfBirth": { "type": "string" },
-          "gender": {
-            "type": "string",
-            "enum": ["female", "male", "other", "undisclosed"]
-          },
-          "phone": { "type": "string", "minLength": 1, "maxLength": 32 },
-          "email": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 254,
-                "format": "email",
-                "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-              },
-              { "type": "null" }
-            ]
-          },
-          "address": {
-            "anyOf": [
-              { "type": "string", "maxLength": 500 },
-              { "type": "null" }
-            ]
-          },
-          "condition": { "type": "string", "maxLength": 2000 },
-          "status": {
-            "default": "unassessed",
-            "type": "string",
-            "enum": [
-              "unassessed",
-              "under_treatment",
-              "stable",
-              "critical",
-              "recovered"
-            ]
-          },
-          "doctorIds": {
-            "default": [],
-            "maxItems": 100,
-            "type": "array",
-            "items": { "type": "string", "pattern": "^[a-f\\d]{24}$" }
-          }
-        },
-        "required": ["name", "dateOfBirth", "gender", "phone"],
         "additionalProperties": false
       },
       "PatientPatch": {

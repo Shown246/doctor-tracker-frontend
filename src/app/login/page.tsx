@@ -5,9 +5,15 @@ import { LoginForm } from '@/components/auth';
 export default async function Page({
   searchParams,
 }: {
-  searchParams: Promise<{ reason?: string }>;
+  searchParams: Promise<{ reason?: string; registered?: string }>;
 }) {
   const account = await readSession();
   if (account) redirect(portalPath(account));
-  return <LoginForm expired={(await searchParams).reason === 'expired'} />;
+  const params = await searchParams;
+  return (
+    <LoginForm
+      expired={params.reason === 'expired'}
+      registered={params.registered === '1'}
+    />
+  );
 }

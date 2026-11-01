@@ -55,7 +55,13 @@ export function AuthFrame({ children }: { children: React.ReactNode }) {
     </main>
   );
 }
-export function LoginForm({ expired = false }: { expired?: boolean }) {
+export function LoginForm({
+  expired = false,
+  registered = false,
+}: {
+  expired?: boolean;
+  registered?: boolean;
+}) {
   const client = useQueryClient();
   const fields: Field[] = [
     { name: 'email', label: 'Email', type: 'email', required: true, max: 254 },
@@ -82,6 +88,14 @@ export function LoginForm({ expired = false }: { expired?: boolean }) {
           className="mb-5 rounded-lg bg-amber-50 p-4 text-sm text-amber-900"
         >
           Your session ended. Please sign in again.
+        </p>
+      )}
+      {registered && (
+        <p
+          role="status"
+          className="mb-5 rounded-lg bg-teal-50 p-4 text-sm text-teal-900"
+        >
+          Your patient account is ready. Sign in to access your portal.
         </p>
       )}
       <RecordForm
@@ -131,8 +145,8 @@ export function RegisterForm() {
       <p className="eyebrow">JOIN YOUR CARE NETWORK</p>
       <h1 className="mt-3 text-3xl">Create your account</h1>
       <p className="mb-6 mt-3 text-sm leading-6 text-slate-500">
-        An administrator reviews every registration before portal access is
-        enabled.
+        Patients can sign in immediately after registration. Doctor accounts
+        require administrator approval before portal access is enabled.
       </p>
       <fieldset className="mb-6">
         <legend className="mb-2 text-sm font-semibold">I am a</legend>
@@ -189,7 +203,9 @@ export function RegisterForm() {
                     },
                   },
           });
-          window.location.replace('/status?submitted=1');
+          window.location.replace(
+            role === 'patient' ? '/login?registered=1' : '/status?submitted=1',
+          );
         }}
       />
       <p className="mt-8 text-sm text-slate-500">

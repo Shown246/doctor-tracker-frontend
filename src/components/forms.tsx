@@ -8,10 +8,12 @@ import {
 } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Eye, EyeOff } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { genders, statuses } from '@/lib/api/types';
 import { title, today } from '@/lib/utils';
 import { ErrorState, Submit } from './shared';
+import { Button } from './ui/button';
 
 export type Values = Record<string, string>;
 export type Field = {
@@ -91,6 +93,7 @@ export function FieldInput({
   errors: FieldErrors<Values>;
 }) {
   const id = useId();
+  const [showPassword, setShowPassword] = useState(false);
   const error = errors[field.name]?.message;
   const shared = {
     id,
@@ -118,19 +121,41 @@ export function FieldInput({
         </select>
       ) : field.type === 'textarea' ? (
         <textarea {...shared} rows={4} />
+      ) : field.type === 'password' ? (
+        <div className="relative">
+          <input
+            {...shared}
+            style={{ paddingRight: '3rem' }}
+            type={showPassword ? 'text' : 'password'}
+            autoComplete={field.autoComplete ?? 'new-password'}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="absolute right-1 top-1/2 -translate-y-1/2"
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            aria-controls={id}
+            onClick={() => setShowPassword((visible) => !visible)}
+          >
+            {showPassword ? (
+              <EyeOff aria-hidden="true" />
+            ) : (
+              <Eye aria-hidden="true" />
+            )}
+          </Button>
+        </div>
       ) : (
         <input
           {...shared}
           type={field.type ?? 'text'}
           autoComplete={
             field.autoComplete ??
-            (field.type === 'password'
-              ? 'new-password'
-              : field.type === 'email'
-                ? 'email'
-                : field.type === 'tel'
-                  ? 'tel'
-                  : undefined)
+            (field.type === 'email'
+              ? 'email'
+              : field.type === 'tel'
+                ? 'tel'
+                : undefined)
           }
           min={field.type === 'date' ? '1900-01-01' : undefined}
           max={field.type === 'date' ? today() : undefined}

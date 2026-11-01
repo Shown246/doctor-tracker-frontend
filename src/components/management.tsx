@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, ArrowLeft, Stethoscope, X } from 'lucide-react';
@@ -61,7 +61,9 @@ export function recordValues(record: Doctor | Patient): Values {
     Object.entries(record).filter(([, value]) => typeof value === 'string'),
   ) as Values;
 }
-function patientInput(values: Values): Schema['PatientCreate'] {
+function patientInput(
+  values: Values,
+): Omit<Schema['PatientPatch'], 'revision'> {
   return {
     name: values.name,
     email: values.email || null,
@@ -71,7 +73,6 @@ function patientInput(values: Values): Schema['PatientCreate'] {
     address: values.address || null,
     condition: values.condition ?? '',
     status: values.status as Patient['status'],
-    doctorIds: [],
   };
 }
 function doctorInput(values: Values): Schema['DoctorCreate'] {
@@ -107,6 +108,7 @@ const doctorListKeys = [
 
 export function PatientList({ doctorId }: { doctorId?: string }) {
   const account = useAccount();
+  const [linkingPatient, setLinkingPatient] = useState<Patient>();
   const { query, change } = useListState(patientListKeys);
   const result = useQuery({
     queryKey: [
@@ -137,6 +139,12 @@ export function PatientList({ doctorId }: { doctorId?: string }) {
   const refresh = useRefresh();
   return (
     <Card>
+      {linkingPatient && (
+        <LinkPatientDialog
+          initialPatient={linkingPatient}
+          onClose={() => setLinkingPatient(undefined)}
+        />
+      )}
       <ListControls
         kind="patients"
         doctorFilter={account.role === 'admin' && !doctorId}
@@ -178,7 +186,17 @@ export function PatientList({ doctorId }: { doctorId?: string }) {
                       }}
                     />
                   )
-                : undefined
+                : account.role === 'admin'
+                  ? (patient) => (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setLinkingPatient(patient)}
+                      >
+                        Link doctors
+                      </Button>
+                    )
+                  : undefined
             }
           />
           <Pagination
@@ -192,27 +210,26 @@ export function PatientList({ doctorId }: { doctorId?: string }) {
 }
 export function PatientsPage() {
   const account = useAccount();
+  const [linking, setLinking] = useState(false);
   return (
     <>
       <PageHeading
         title={account.role === 'admin' ? 'Patients' : 'My patients'}
         description={
           account.role === 'admin'
-            ? 'Manage patient records and connect them with the right care team.'
+            ? 'Search registered patients by phone or email and link them to one or more doctors.'
             : 'Review and update care for your currently assigned patients.'
         }
         action={
           account.role === 'admin' && (
-            <Button asChild>
-              <Link href="/admin/patients/new">
-                <Plus />
-                Add patient
-              </Link>
+            <Button onClick={() => setLinking(true)}>
+              <Stethoscope /> Link patient
             </Button>
           )
         }
       />
       <PatientList />
+      {linking && <LinkPatientDialog onClose={() => setLinking(false)} />}
     </>
   );
 }
@@ -325,77 +342,120 @@ export function NewDoctor() {
     </>
   );
 }
-export function NewPatient() {
-  const router = useRouter();
-  const search = useSearchParams();
+export function LinkPatientDialog({
+  initialPatient,
+  onClose,
+}: {
+  initialPatient?: Patient;
+  onClose: () => void;
+}) {
+  const [patient, setPatient] = useState(initialPatient);
+  const [doctors, setDoctors] = useState<{ id: string; name: string }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>();
   const refresh = useRefresh();
-  const initialDoctor = search.get('doctorId');
-  const [doctors, setDoctors] = useState<{ id: string; name: string }[]>(
-    initialDoctor && /^[a-f\d]{24}$/i.test(initialDoctor)
-      ? [{ id: initialDoctor, name: 'Preselected doctor' }]
-      : [],
-  );
   return (
-    <>
-      <PageHeading
-        title="Add patient"
-        description="Create a patient record and optionally select initial doctor assignments."
-      />
-      <Card>
-        <RecordForm
-          fields={[...patientFields, ...clinicalFields]}
-          defaults={{ gender: 'undisclosed', status: 'unassessed' }}
-          submitLabel="Create patient"
-          onSave={async (values) => {
-            const patient = body(
-              await api.POST('/patients', {
-                body: {
-                  ...patientInput(values),
-                  doctorIds: doctors.map((d) => d.id),
-                },
-              }),
-            ).data;
-            await refresh(['patients', 'doctors', 'dashboard']);
-            toast.success('Patient created');
-            router.push(`/admin/patients/${patient.id}`);
-          }}
-        >
-          <fieldset className="rounded-xl border border-slate-200 p-4">
-            <legend className="px-2 text-sm font-semibold">
-              Initial doctors (optional, up to 100)
-            </legend>
-            <div className="mb-3 flex flex-wrap gap-2">
-              {doctors.map((d) => (
-                <span
-                  key={d.id}
-                  className="flex items-center gap-2 rounded-lg bg-teal-50 px-3 py-2 text-xs text-teal-800"
-                >
-                  {d.name}
-                  <button
-                    type="button"
-                    aria-label={`Remove ${d.name}`}
-                    onClick={() =>
-                      setDoctors(doctors.filter((v) => v.id !== d.id))
-                    }
-                  >
-                    <X size={14} />
-                  </button>
-                </span>
-              ))}
-            </div>
-            {doctors.length < 100 && (
-              <RecordPicker
-                kind="doctors"
-                selected={doctors.map((d) => d.id)}
-                onSelect={(d) =>
-                  setDoctors([...doctors, { id: d.id, name: d.name }])
+    <Modal
+      open
+      onOpenChange={(open) => {
+        if (!open && !busy) onClose();
+      }}
+      title="Link patient to doctors"
+      description="Search for a registered patient by phone number or email, then select one or more doctors."
+    >
+      {!!error && <ErrorState error={error} />}
+      {!patient ? (
+        <RecordPicker
+          kind="patients"
+          onSelect={(record) => setPatient(record as Patient)}
+        />
+      ) : (
+        <div className="space-y-4" aria-busy={busy}>
+          <div className="rounded-xl bg-slate-50 p-4">
+            <p className="font-semibold">{patient.name}</p>
+            <p className="break-all text-sm text-slate-600">
+              {patient.phone}
+              {patient.email && ` / ${patient.email}`}
+            </p>
+            <Button
+              variant="ghost"
+              disabled={busy}
+              onClick={() => {
+                setPatient(undefined);
+                setDoctors([]);
+                setError(undefined);
+              }}
+            >
+              Choose another patient
+            </Button>
+          </div>
+          <p className="text-sm text-slate-600">
+            Select doctors to link. Existing doctor links will be kept.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {doctors.map((doctor) => (
+              <Button
+                key={doctor.id}
+                variant="outline"
+                disabled={busy}
+                aria-label={`Remove ${doctor.name}`}
+                onClick={() =>
+                  setDoctors((current) =>
+                    current.filter((d) => d.id !== doctor.id),
+                  )
                 }
-              />
-            )}
-          </fieldset>
-        </RecordForm>
-      </Card>
-    </>
+              >
+                {doctor.name}
+                <X size={14} />
+              </Button>
+            ))}
+          </div>
+          {!busy && (
+            <RecordPicker
+              kind="doctors"
+              selected={doctors.map((d) => d.id)}
+              onSelect={(doctor) =>
+                setDoctors((current) =>
+                  current.some((d) => d.id === doctor.id)
+                    ? current
+                    : [...current, { id: doctor.id, name: doctor.name }],
+                )
+              }
+            />
+          )}
+          <Button
+            disabled={busy || !doctors.length}
+            onClick={async () => {
+              setBusy(true);
+              setError(undefined);
+              try {
+                for (const doctor of doctors) {
+                  await api.PUT('/doctors/{doctorId}/patients/{patientId}', {
+                    params: {
+                      path: { doctorId: doctor.id, patientId: patient.id },
+                    },
+                  });
+                  setDoctors((current) =>
+                    current.filter((d) => d.id !== doctor.id),
+                  );
+                }
+                toast.success('Patient linked to selected doctors');
+                onClose();
+              } catch (err) {
+                setError(err);
+              } finally {
+                setBusy(false);
+                await refresh(['doctors', 'patients', 'dashboard']);
+              }
+            }}
+          >
+            {busy
+              ? 'Linking doctors...'
+              : `Link selected doctors (${doctors.length})`}
+          </Button>
+        </div>
+      )}
+    </Modal>
   );
 }
 export function DoctorDetailView({ id }: { id: string }) {
@@ -479,12 +539,6 @@ export function DoctorDetailView({ id }: { id: string }) {
           >
             Link existing patient
           </Button>
-          <Button asChild>
-            <Link href={`/admin/patients/new?doctorId=${id}`}>
-              <Plus />
-              Add new patient
-            </Link>
-          </Button>
         </div>
       </div>
       <PatientList doctorId={id} />
@@ -548,8 +602,7 @@ export function PatientEditor({
         setVersion(version + 1);
       }}
       onSave={async (values) => {
-        const { doctorIds: _doctorIds, ...input } = patientInput(values);
-        void _doctorIds;
+        const input = patientInput(values);
         await api.PATCH('/patients/{id}', {
           params: { path: { id: patient.id } },
           body: { ...input, revision: current.revision },

@@ -11,6 +11,7 @@ import { listQuery, updateListState } from '@/lib/list-state';
 import { useAccount } from './account-context';
 import { Badge, Empty, ErrorState, Loading } from './shared';
 import { Button } from './ui/button';
+import { FilterMenu } from './ui/filter-menu';
 
 export function useListState(keys?: readonly string[]) {
   const search = useSearchParams();
@@ -132,11 +133,7 @@ export function ScopedFilter({
       ),
   });
   return (
-    <details className="filter-menu">
-      <summary>
-        {title(field)}
-        {value ? `: ${title(value)}` : ''}
-      </summary>
+    <FilterMenu label={`${title(field)}${value ? `: ${title(value)}` : ''}`}>
       <div className="filter-panel">
         <label className="field">
           <span>Find {field}</span>
@@ -199,7 +196,7 @@ export function ScopedFilter({
           </>
         )}
       </div>
-    </details>
+    </FilterMenu>
   );
 }
 export function ListControls({
@@ -287,10 +284,9 @@ export function ListControls({
               }
             />
             {doctorFilter && (
-              <details className="filter-menu">
-                <summary>
-                  Assigned doctor{query.doctorId ? ' (selected)' : ''}
-                </summary>
+              <FilterMenu
+                label={`Assigned doctor${query.doctorId ? ' (selected)' : ''}`}
+              >
                 <div className="filter-panel">
                   <Button
                     variant="ghost"
@@ -303,7 +299,7 @@ export function ListControls({
                     onSelect={(record) => change('doctorId', record.id)}
                   />
                 </div>
-              </details>
+              </FilterMenu>
             )}
             {['from', 'to'].map((field) => (
               <label key={field} className="field">

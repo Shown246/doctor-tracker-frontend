@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
-import { fillPatient, login, mutate, session, signup } from './helpers';
+import { login, mutate, session, signup } from './helpers';
 
-test('signup, pending status, admin approval and role routing for both roles', async ({
+test('patient signup is active immediately while doctor signup requires approval', async ({
   browser,
 }) => {
   const stamp = Date.now();
@@ -14,30 +14,32 @@ test('signup, pending status, admin approval and role routing for both roles', a
     const email = `signup-${role}-${stamp}@example.test`;
     await signup(page, role, name, email);
     await login(page, role, email);
-    await expect(
-      page.getByRole('heading', { name: 'Your registration is in review' }),
-    ).toBeVisible();
-    await page.goto(`/${role}`);
-    await expect(page).toHaveURL('/status');
-    await admin.page.goto('/admin/registrations?status=pending');
-    await admin.page.getByRole('link', { name, exact: true }).click();
-    if (role === 'patient') {
+    if (role === 'doctor') {
+      await expect(
+        page.getByRole('heading', { name: 'Your registration is in review' }),
+      ).toBeVisible();
+      await page.goto('/doctor');
+      await expect(page).toHaveURL('/status');
+      await admin.page.goto('/admin/registrations?status=pending');
+      await admin.page.getByRole('link', { name, exact: true }).click();
       await admin.page
-        .getByLabel('Condition', { exact: true })
-        .fill('Reviewed synthetic condition');
-      await admin.page
-        .getByLabel('Status', { exact: false })
-        .selectOption('stable');
+        .getByRole('button', { name: 'Approve and create profile' })
+        .click();
+      await expect(
+        admin.page.getByText('This registration has already been reviewed.', {
+          exact: false,
+        }),
+      ).toBeVisible();
+      await page.getByRole('button', { name: 'Check status' }).click();
+    } else {
+      await admin.page.goto('/admin/registrations?status=pending');
+      await expect(
+        admin.page.getByRole('link', { name, exact: true }),
+      ).toHaveCount(0);
+      expect((await context.request.get('/api/v1/me/profile')).status()).toBe(
+        200,
+      );
     }
-    await admin.page
-      .getByRole('button', { name: 'Approve and create profile' })
-      .click();
-    await expect(
-      admin.page.getByText('This registration has already been reviewed.', {
-        exact: false,
-      }),
-    ).toBeVisible();
-    await page.getByRole('button', { name: 'Check status' }).click();
     await expect(page).toHaveURL(`/${role}`);
     await page.goto('/admin/patients');
     await expect(page).toHaveURL(`/${role}`);
@@ -46,7 +48,7 @@ test('signup, pending status, admin approval and role routing for both roles', a
   await admin.context.close();
 });
 
-test('admin creates profiles, links and unlinks patients, and confirms permanent deletion', async ({
+test('admin links registered patients to multiple doctors, unlinks and confirms permanent deletion', async ({
   browser,
 }) => {
   const { context, page } = await session(browser, 'admin');
@@ -70,14 +72,65 @@ test('admin creates profiles, links and unlinks patients, and confirms permanent
   await expect(
     page.getByText('Updated Synthetic Hospital', { exact: true }),
   ).toBeVisible();
-  await page.getByRole('link', { name: 'Add new patient' }).click();
-  await fillPatient(page, `Workflow Patient ${stamp}`);
-  await page.getByRole('button', { name: 'Create patient' }).click();
+  const patientContext = await browser.newContext();
+  const patientPage = await patientContext.newPage();
+  const patientEmail = `workflow-patient-${stamp}@example.test`;
+  await signup(
+    patientPage,
+    'patient',
+    `Workflow Patient ${stamp}`,
+    patientEmail,
+  );
+  await patientContext.close();
+  const secondDoctor = await mutate(context.request, 'post', '/doctors', {
+    name: `Dr Second ${stamp}`,
+    email: `second-${stamp}@example.test`,
+    specialization: 'Cardiology',
+    hospital: 'Synthetic Hospital',
+    phone: '+8801700000003',
+  });
+  expect(secondDoctor.status()).toBe(201);
+  await page.goto('/admin/patients');
+  await expect(
+    page.getByRole('link', { name: 'Add patient', exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Link patient', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog
+    .getByRole('textbox', { name: 'Search patients' })
+    .fill(patientEmail);
+  await dialog
+    .getByRole('button', { name: new RegExp(`Workflow Patient ${stamp}`) })
+    .click();
+  for (const name of [`Dr Workflow ${stamp}`, `Dr Second ${stamp}`]) {
+    await dialog.getByRole('textbox', { name: 'Search doctors' }).fill(name);
+    await dialog
+      .getByRole('button', { name: new RegExp(`${name}.*Select`) })
+      .click();
+  }
+  await dialog
+    .getByRole('button', { name: 'Link selected doctors (2)', exact: true })
+    .click();
+  await expect(dialog).not.toBeVisible();
+  await page
+    .getByRole('textbox', { name: 'Search records' })
+    .fill(patientEmail);
+  await expect(page).toHaveURL(/search=workflow-patient/);
+  await page
+    .getByRole('link', { name: `Workflow Patient ${stamp}`, exact: true })
+    .click();
   await expect(page).toHaveURL(/\/admin\/patients\/[a-f\d]{24}$/);
   const patientUrl = page.url();
-  await expect(
-    page.getByRole('link', { name: `Dr Workflow ${stamp}`, exact: true }),
-  ).toBeVisible();
+  for (const name of [`Dr Workflow ${stamp}`, `Dr Second ${stamp}`]) {
+    await expect(page.getByRole('link', { name, exact: true })).toBeVisible();
+  }
+  const secondLink = page.locator('div.rounded-lg.border').filter({
+    has: page.getByRole('link', { name: `Dr Second ${stamp}`, exact: true }),
+  });
+  await secondLink.getByRole('button', { name: 'Unlink', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Unlink doctor', exact: true })
+    .click();
   await page.getByRole('button', { name: 'Edit patient', exact: true }).click();
   await page
     .getByLabel('Address', { exact: true })
@@ -412,11 +465,13 @@ test('URL state, desktop and mobile layouts, keyboard navigation and accessible 
     fullPage: true,
   });
   await page.goto('/admin/patients/new');
-  await page.getByRole('button', { name: 'Create patient' }).click();
-  await expect(
-    page.getByText('Name is required', { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByLabel('Name', { exact: false }).first()).toBeFocused();
+  await expect(page).toHaveURL('/admin/patients');
+  await page.getByRole('button', { name: 'Link patient', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  const linkAxe = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa'])
+    .analyze();
+  expect(linkAxe.violations).toEqual([]);
   await context.close();
   const anonymous = await browser.newContext({
     viewport: { width: 390, height: 844 },

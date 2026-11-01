@@ -60,11 +60,7 @@ export interface paths {
          */
         get: operations["get_patients"];
         put?: never;
-        /**
-         * Create a patient and optional initial assignments (admin)
-         * @description Creates the patient and all initial assignments atomically. doctorIds accepts at most 100 IDs and is deduplicated case-insensitively. Missing doctors abort the transaction. Email is optional and unique when present; null omits it. Empty/null address and empty condition are stored as absent. Birth dates must be real dates from 1900 through today in Asia/Dhaka. Age is derived.
-         */
-        post: operations["post_patients"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -433,8 +429,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Submit a pending doctor or patient account
-         * @description Does not log in or create a profile. Requires a previously established CSRF session. Only doctor/patient roles and the listed fields are accepted. Ten attempts per IP per fixed one-hour window.
+         * Register an active patient account or submit a doctor account for approval
+         * @description Patients receive an active account and linked unassessed patient profile immediately. Doctors receive a pending account without a profile and require admin approval. Does not log in. Existing profile emails are not automatically linked. Requires a previously established CSRF session. Only doctor/patient roles and the listed fields are accepted. Ten attempts per IP per fixed one-hour window.
          */
         post: operations["registerAccount"];
         delete?: never;
@@ -579,23 +575,6 @@ export interface components {
             phone?: string;
             /** Format: email */
             email?: string;
-        };
-        PatientCreate: {
-            name: string;
-            dateOfBirth: string;
-            /** @enum {string} */
-            gender: "female" | "male" | "other" | "undisclosed";
-            phone: string;
-            email?: string | null;
-            address?: string | null;
-            condition?: string;
-            /**
-             * @default unassessed
-             * @enum {string}
-             */
-            status: "unassessed" | "under_treatment" | "stable" | "critical" | "recovered";
-            /** @default [] */
-            doctorIds: string[];
         };
         PatientPatch: {
             name?: string;
@@ -1670,122 +1649,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PatientListResponse"];
-                };
-            };
-            /** @description Invalid identifier, body or query; unsupported fields are rejected */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Authentication is required or has expired */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Forbidden role, inactive account, missing profile, invalid CSRF token or browser origin */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Profile or assignment not found; doctors receive 404 outside their scope */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Stale revision, duplicate email or attempted linked-profile email change */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Request exceeds 32 KiB */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Unsupported request encoding or charset */
-            415: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Unexpected server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Database unavailable */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    post_patients: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                /**
-                 * @example {
-                 *       "name": "Example Patient",
-                 *       "dateOfBirth": "1995-02-28",
-                 *       "gender": "undisclosed",
-                 *       "phone": "+8801800000000",
-                 *       "condition": "Routine observation",
-                 *       "status": "unassessed",
-                 *       "doctorIds": []
-                 *     }
-                 */
-                "application/json": components["schemas"]["PatientCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful response; private, no-store */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PatientResponse"];
                 };
             };
             /** @description Invalid identifier, body or query; unsupported fields are rejected */
@@ -4032,7 +3895,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Pending account */
+            /** @description Active patient or pending doctor account */
             201: {
                 headers: {
                     [name: string]: unknown;

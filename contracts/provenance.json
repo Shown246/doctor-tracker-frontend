@@ -2,7 +2,7 @@
   "version": "1.0.0-rc.1",
   "backendCommit": "280331b",
   "handoffCommit": "fc3d947",
-  "source": "../docs/openapi.json",
-  "sha256": "b81ed89fb858d1645e06ae5e8c7c2a995f649ed173bd49d6e90d0b428559086d",
-  "release": "Local release candidate; hosted v1.0.0 deferred by owner on 2026-10-31"
+  "source": "../doctor-tracker-backend/src/http/openapi.ts (local runtime schemas)",
+  "sha256": "3079225f4253acac1fcad9149acfc0b4201f3b23c4bf72184dde94e7128c6fe1",
+  "release": "Local contract update: patients self-register; admin patient creation removed"
 }

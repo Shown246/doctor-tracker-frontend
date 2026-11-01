@@ -21,7 +21,7 @@ export async function login(
   const c = credentials(role);
   await page.goto('/login');
   await page.getByLabel('Email', { exact: true }).fill(email ?? c.email);
-  await page.getByLabel('Password', { exact: false }).fill(c.password);
+  await page.locator('input[name="password"]').fill(c.password);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/${role}$|/status$`));
 }
@@ -73,7 +73,7 @@ export async function signup(
   await page.getByLabel('Full name').fill(name);
   await page.getByLabel('Email', { exact: false }).fill(email);
   await page
-    .getByLabel('Password', { exact: false })
+    .locator('input[name="password"]')
     .fill(credentials('admin').password);
   await page.getByLabel('Phone', { exact: false }).fill('+8801800000001');
   if (role === 'doctor') {
@@ -81,5 +81,7 @@ export async function signup(
     await page.getByLabel('Hospital').fill('Synthetic Hospital');
   } else await page.getByLabel('Date of birth').fill('1992-05-15');
   await page.getByRole('button', { name: 'Submit registration' }).click();
-  await expect(page).toHaveURL('/status?submitted=1');
+  await expect(page).toHaveURL(
+    role === 'patient' ? '/login?registered=1' : '/status?submitted=1',
+  );
 }

@@ -10,7 +10,7 @@ test('rejected submissions show their reason and cannot enter a portal', async (
   const stamp = Date.now();
   const name = `Rejected Synthetic ${stamp}`;
   const email = `rejected-${stamp}@example.test`;
-  await signup(page, 'patient', name, email);
+  await signup(page, 'doctor', name, email);
   await admin.page.goto('/admin/registrations?status=pending');
   await admin.page.getByRole('link', { name, exact: true }).click();
   await admin.page
@@ -24,14 +24,14 @@ test('rejected submissions show their reason and cannot enter a portal', async (
       exact: false,
     }),
   ).toBeVisible();
-  await login(page, 'patient', email);
+  await login(page, 'doctor', email);
   await expect(
     page.getByRole('heading', { name: 'Registration not approved' }),
   ).toBeVisible();
   await expect(page.locator('blockquote')).toContainText(
     'Synthetic rejection feedback',
   );
-  await page.goto('/patient/profile');
+  await page.goto('/doctor/profile');
   await expect(page).toHaveURL('/status');
   expect((await context.request.get('/api/v1/me/profile')).status()).toBe(403);
   await context.close();
@@ -136,17 +136,6 @@ test('deleting a linked patient revokes their current session and hides private 
   const name = `Deleted Account ${stamp}`;
   const email = `deleted-${stamp}@example.test`;
   await signup(page, 'patient', name, email);
-  await admin.page.goto('/admin/registrations?status=pending');
-  await admin.page.getByRole('link', { name, exact: true }).click();
-  await admin.page.getByLabel('Status', { exact: true }).selectOption('stable');
-  await admin.page
-    .getByRole('button', { name: 'Approve and create profile' })
-    .click();
-  await expect(
-    admin.page.getByText('This registration has already been reviewed.', {
-      exact: false,
-    }),
-  ).toBeVisible();
   await login(page, 'patient', email);
   const me = await context.request.get('/api/v1/auth/me');
   const id = (await me.json()).data.profileId;

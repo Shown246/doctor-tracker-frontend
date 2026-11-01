@@ -1,10 +1,5 @@
-import { Suspense } from 'react';
-import { NewPatient } from '@/components/management';
-import { Loading } from '@/components/shared';
+import { redirect } from 'next/navigation';
+
 export default function Page() {
-  return (
-    <Suspense fallback={<Loading />}>
-      <NewPatient />
-    </Suspense>
-  );
+  redirect('/admin/patients');
 }
